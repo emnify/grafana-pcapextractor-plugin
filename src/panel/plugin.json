@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
   "type": "panel",
-  "name": "PCAP Extractor Download Button",
+  "name": "PCAP Download",
   "id": "emnify-pcapextractor-panel",
   "info": {
     "keywords": ["panel"],

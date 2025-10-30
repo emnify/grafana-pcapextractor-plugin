@@ -11,17 +11,6 @@ export const Components = {
       testID: 'data-testid s3BucketName',
     }
   },
-  QueryEditor: {
-    CodeEditor: {
-      container: 'Code editor container',
-    },
-    TableView: {
-      input: 'toggle-table-view',
-    },
-  },
-  RefreshPicker: {
-    runButton: 'RefreshPicker run button',
-  },
 };
 
 export const selectors: { components: E2ESelectors<typeof Components> } = {

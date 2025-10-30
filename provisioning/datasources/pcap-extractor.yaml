@@ -1,0 +1,9 @@
+apiVersion: 1
+
+datasources:
+  - name: 'PCAP Extractor'
+    type: 'emnify-pcapextractor-datasource'
+    jsonData:
+      s3Bucket: my-pcap-extractor
+      stepFunctionArn: arn:aws:states:us-onfire-1:12345678912:stateMachine:my-pcap-extractor
+

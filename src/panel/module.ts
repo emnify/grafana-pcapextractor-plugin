@@ -16,8 +16,7 @@ export const plugin = new PanelPlugin<PcapExtractorOptions>(Download).setPanelOp
           try {
             const dataSourceSrv = getDataSourceSrv();
             const dataSources = dataSourceSrv.getList();
-            
-            // Filter for PCAP extractor data sources
+
             const options = dataSources
               .filter(ds => ds.type === 'emnify-pcapextractor-datasource')
               .map(ds => ({
@@ -25,7 +24,7 @@ export const plugin = new PanelPlugin<PcapExtractorOptions>(Download).setPanelOp
                 value: ds.uid,
                 description: ds.type,
               }));
-            
+
             return options;
           } catch (error) {
             console.error('Error fetching PCAP extractor data sources:', error);

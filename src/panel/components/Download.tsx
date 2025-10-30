@@ -1,24 +1,14 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { PanelProps } from '@grafana/data';
+import { PanelProps, Field, QueryResultMeta } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
-import { PcapExtractorOptions } from 'types';
-import { css, cx } from '@emotion/css';
+import { PcapExtractorOptions, QueryTemplate } from 'panel/types';
+import { css } from '@emotion/css';
 import { useStyles2, Button, Alert, Spinner } from '@grafana/ui';
 
 interface Props extends PanelProps<PcapExtractorOptions> { }
 
 const getStyles = () => {
   return {
-    wrapper: css`
-      //font-family: Open Sans;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      padding: 16px;
-    `,
     buttonContainer: css`
       display: flex;
       flex-direction: column;
@@ -35,11 +25,13 @@ const getStyles = () => {
       max-width: 600px;
       margin-top: 8px;
     `,
+    spinner: css`
+      margin-right: 8px;
+    `
   };
 };
 
-// Helper function to extract field values from response
-const extractFieldValues = (response: any): Map<string, string> => {
+const parseResponse = (response: any): Map<string, string> => {
   const fieldValues = new Map<string, string>();
 
   if (!response?.results?.['pcap-extract']) {
@@ -67,256 +59,219 @@ const extractFieldValues = (response: any): Map<string, string> => {
   return fieldValues;
 };
 
-export const Download: React.FC<Props> = ({ options, data, width, height }) => {
+
+const getQueryTemplate = (action: 'request' | 'status', jobId: string, options: any): QueryTemplate => {
+  const query: QueryTemplate = {
+    refId: 'pcap-extract',
+    datasource: {
+      type: 'emnify-pcapextractor-datasource',
+      uid: options.pcapExtractorDataSource
+    },
+    action: action,
+    jobId: jobId
+  };
+
+  return query;
+}
+
+async function queryBackend(query: QueryTemplate) {
+  const requestPayload = {
+    queries: [query],
+  };
+  const backendSrv = getBackendSrv();
+
+  const apiUrl = '/api/ds/query';
+
+  window.console.log('Sending request to backend', requestPayload);
+  const response = await backendSrv.post(apiUrl, requestPayload);
+  window.console.log('Backend response received', response);
+
+  return parseResponse(response);
+}
+
+const transformExtractData = (seriesData: {
+  name?: string | undefined;
+  fields: Field[] | undefined;
+  length: number | undefined;
+  refId?: string | undefined;
+  meta?: QueryResultMeta | undefined
+})=>  {
+
+  // Extract only the required fields: source_file and source_packet_number
+  const requiredFieldNames = ['source_file', 'source_packet_number'];
+  const extractedFields = seriesData?.fields?.filter(field =>
+    requiredFieldNames.includes(field.name)
+  ).map(field => ({
+    name: field.name,
+    type: field.type,
+    values: field.values ? Array.from(field.values) : []
+  })) || [];
+
+  // Validate that all required fields are present
+  const missingFields = requiredFieldNames.filter(required => 
+    !extractedFields.map(field => field.name).includes(required)
+  );
+
+  if (missingFields.length > 0) {
+    throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
+  }
+
+  // Transform data to group packet numbers by source file
+  const sourceFileField = extractedFields.find(field => field.name === 'source_file');
+  const packetNumberField = extractedFields.find(field => field.name === 'source_packet_number');
+
+  const extractData: { [sourceFile: string]: number[] } = {};
+
+  if (sourceFileField && packetNumberField) {
+    const sourceFiles = sourceFileField.values;
+    const packetNumbers = packetNumberField.values;
+
+    for (let i = 0; i < sourceFiles.length; i++) {
+      const sourceFile = sourceFiles[i] as string;
+      const packetNumber = packetNumbers[i] as number;
+
+      if (!extractData[sourceFile]) {
+        extractData[sourceFile] = [];
+      }
+
+      if (!extractData[sourceFile].includes(packetNumber)) {
+        extractData[sourceFile].push(packetNumber);
+      }
+    }
+  }
+
+  return extractData;
+};
+
+function stopPolling(pollingIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>) {
+  // Clear polling interval
+  if (pollingIntervalRef.current) {
+    clearInterval(pollingIntervalRef.current);
+    pollingIntervalRef.current = null;
+  }
+}
+
+function triggerDownload(downloadUrl: string | undefined) {
+  // Trigger browser download
+  if (downloadUrl) {
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = ''; // Let the browser determine filename from URL/headers
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.console.log('Download triggered for URL:', downloadUrl);
+  }
+}
+
+export const Download: React.FC<Props> = ({ options, data }) => {
 
   const styles = useStyles2(getStyles);
   const [downloadState, setDownloadState] = useState<'idle' | 'processing' | 'downloaded' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  // const [jobId, setJobId] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Log component initialization and prop changes
+  // FIXME remove unless considered useful
   React.useEffect(() => {
     window.console.log('=== Download Component Initialized/Updated ===');
-    window.console.log('Panel options:', options);
     window.console.log('Panel data summary:', {
       seriesCount: data.series?.length || 0,
       timeRange: data.timeRange,
       state: data.state
     });
-    window.console.log('Component dimensions:', { width, height });
-  }, [options, data, width, height]);
+  }, [options, data]);
 
 
   // Clear polling interval when component unmounts or when polling stops
   React.useEffect(() => {
     return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
+      stopPolling(pollingIntervalRef)
     };
   }, []);
 
-  // Function to poll for job status
   const pollJobStatus = useCallback(async (jobId: string) => {
     try {
       window.console.log(`Polling job status for runId: ${jobId}`);
 
-      const backendSrv = getBackendSrv();
+      const query = getQueryTemplate('status', jobId, options);
+      const response = await queryBackend(query);
 
-      const query = {
-        refId: 'pcap-extract',
-        datasource: {
-          type: 'emnify-pcapextractor-datasource',
-          uid: options.pcapExtractorDataSource
-        },
-        action: 'status',
-        jobId: jobId,
-        timeRange: data.timeRange,
-
-      };
-
-      const requestPayload = {
-        queries: [query],
-        from: data.timeRange.from.valueOf().toString(),
-        to: data.timeRange.to.valueOf().toString(),
-      };
-
-      const apiUrl = `/api/ds/query?ds_type=emnify-pcapdownload-datasource&requestId=${Date.now()}`;
-      const response = await backendSrv.post(apiUrl, requestPayload);
-
-      window.console.log('Status response:', response);
-
-      // Extract field values from the nested response structure using schema
-      const responseData = extractFieldValues(response);
-      const status = responseData.get('status') || null;
-
-      window.console.log('Extracted response data:', responseData);
-      window.console.log('Extracted status:', status);
+      const status = response.get('status') || null;
 
       if (status) {
         if (status === 'RUNNING') {
           window.console.log('Job still running, continuing to poll...');
-          // Continue polling - interval will handle the next call
         } else if (status === 'SUCCEEDED') {
           window.console.log('Job completed successfully!');
 
-          // Clear polling interval
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-
-          const downloadUrl = responseData.get('download_url');
+          const downloadUrl = response.get('download_url');
           window.console.log('Download URL:', downloadUrl);
 
-          // Trigger browser download
-          if (downloadUrl) {
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = ''; // Let the browser determine filename from URL/headers
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.console.log('Download triggered for URL:', downloadUrl);
-          }
-
           setDownloadState('downloaded');
+          triggerDownload(downloadUrl);
+
         } else {
-          // Handle error status
           window.console.error('Job ended with status:', status);
-
-          // Clear polling interval
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-
           let errorMessage = `Job failed with status: ${status}`;
-
-          if (responseData.has('error')) {
-            errorMessage += `\nError: ${responseData.get('error')}`;
+          if (response.has('error')) {
+            errorMessage += `\nError: ${response.get('error')}`;
           }
-          if (responseData.has('cause')) {
-            errorMessage += `\nCause: ${responseData.get('cause')}`;
+          if (response.has('cause')) {
+            errorMessage += `\nCause: ${response.get('cause')}`;
           }
-
           setError(errorMessage);
-          // setDownloadState('error');
         }
       } else {
-        throw new Error('Invalid status response format - no status found in response');
+        setError('Invalid status response format - no status found in response:' + response);
       }
     } catch (error) {
       window.console.error('Error polling job status:', error);
       let errorMessage = JSON.stringify(error, null, 2);
       setError(`Failed to poll status: ${errorMessage}`);
 
-      // Clear polling interval
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-
-      // setDownloadState('error');
     }
-  }, [data.timeRange, options.pcapExtractorDataSource]);
+    stopPolling(pollingIntervalRef)
+  }, [options]);
 
   const handleDownload = async () => {
-    console.log('🔥 DOWNLOAD BUTTON CLICKED - Handler executing!');
-    window.console.log('=== PCAP Download Process Started ===');
-    window.console.log('Button clicked - initiating download process');
 
-
-    // Generate job ID
+    // FIXME make this dependent on the data so that we don't process the
+    // same file+packet extraction twice
     const jobId = "run-" + Date.now();
     setDownloadState('processing');
     setError(null);
 
     try {
-      window.console.log('Step 1: Validating configuration...');
-      window.console.log('PCAP Extractor DataSource UID:', options.pcapExtractorDataSource);
+      window.console.log('⬇️ Download started requested');
 
-      // Validate configuration
       if (!options.pcapExtractorDataSource) {
-        window.console.error('Configuration validation failed: No PCAP Extractor data source configured');
         throw new Error('PCAP Extractor data source not configured');
       }
-      window.console.log('✓ Configuration validation passed');
 
-      window.console.log('Step 2: Collecting panel data...');
       const seriesData = data.series?.[0];
-
-      // Extract only the required fields: source_file and source_packet_number
-      const requiredFieldNames = ['source_file', 'source_packet_number'];
-      const extractedFields = seriesData?.fields?.filter(field =>
-        requiredFieldNames.includes(field.name)
-      ).map(field => ({
-        name: field.name,
-        type: field.type,
-        values: field.values ? Array.from(field.values) : []
-      })) || [];
-
-      // Validate that both required fields are present
-      const foundFieldNames = extractedFields.map(field => field.name);
-      const missingFields = requiredFieldNames.filter(name => !foundFieldNames.includes(name));
-
-      if (missingFields.length > 0) {
-        window.console.error('Missing required fields:', missingFields);
-        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      let extractData;
+      try {
+        extractData = transformExtractData(seriesData);
+      } catch (error){
+        setError("" + error)
+        return;
       }
 
-      // Transform data to group packet numbers by source file
-      const sourceFileField = extractedFields.find(field => field.name === 'source_file');
-      const packetNumberField = extractedFields.find(field => field.name === 'source_packet_number');
+      window.console.log('Extract data prepared', extractData);
 
-      const groupedData: { [sourceFile: string]: number[] } = {};
+      let query = getQueryTemplate('request', jobId, options);
+      query.extract = extractData
 
-      if (sourceFileField && packetNumberField) {
-        const sourceFiles = sourceFileField.values;
-        const packetNumbers = packetNumberField.values;
+      const response = await queryBackend(query)
+      window.console.log('Received response data', response);
 
-        for (let i = 0; i < sourceFiles.length; i++) {
-          const sourceFile = sourceFiles[i] as string;
-          const packetNumber = packetNumbers[i] as number;
+      window.console.log('✓ Download request submitted, now polling for status');
 
-          if (!groupedData[sourceFile]) {
-            groupedData[sourceFile] = [];
-          }
-
-          if (!groupedData[sourceFile].includes(packetNumber)) {
-            groupedData[sourceFile].push(packetNumber);
-          }
-        }
-      }
-
-      // Prepare the query for the PCAP extractor data source
-      const query = {
-        refId: 'pcap-extract',
-        datasource: {
-          type: 'emnify-pcapextractor-datasource',
-          uid: options.pcapExtractorDataSource
-        },
-        action: 'request',
-        jobId: jobId,
-        extract: groupedData,
-        timeRange: data.timeRange,
-
-      };
-
-
-      window.console.log('Grouped data by source file:', groupedData);
-
-      window.console.log('Step 3: Sending request to backend...');
-
-      // setJobId(currentJobId);
-
-      const backendSrv = getBackendSrv();
-      const requestPayload = {
-        queries: [query],
-        from: data.timeRange.from.valueOf().toString(),
-        to: data.timeRange.to.valueOf().toString(),
-        seriesData: [] // allSeries
-      };
-
-      window.console.log('Backend request payload:', requestPayload);
-
-      // TODO configurable?
-      const apiUrl = `/api/ds/query?ds_type=emnify-pcapdownload-datasource&requestId=${Date.now()}`;
-      const response = await backendSrv.post(apiUrl, requestPayload);
-
-      window.console.log('Request response:', response);
-
-      // Start polling for status
-      window.console.log('Step 4: Starting status polling...');
+      // Start polling for step function status
       pollingIntervalRef.current = setInterval(() => {
         pollJobStatus(jobId);
       }, 10000); // Poll every 10 seconds
-
-      // Do initial status check immediately
-      pollJobStatus(jobId);
-
-      // window.console.log('✓ Download request submitted, now polling for status');
 
     } catch (error) {
       window.console.error('❌ PCAP Download Process Failed');
@@ -334,56 +289,13 @@ export const Download: React.FC<Props> = ({ options, data, width, height }) => {
   // Reset download state when data starts loading or when data changes
   React.useEffect(() => {
     if (isDataLoading && (downloadState === 'downloaded' || downloadState === 'error')) {
-      window.console.log(`Data is loading - resetting download state from "${downloadState}" to "idle"`);
       setDownloadState('idle');
       setError(null);
-      // setJobId(null);
 
-      // Clear any ongoing polling
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
+      stopPolling(pollingIntervalRef)
     }
   }, [isDataLoading, downloadState]);
 
-  // Reset download state when data changes (e.g., on refresh, time range change, etc.)
-  React.useEffect(() => {
-    if (downloadState === 'downloaded' || downloadState === 'error') {
-      window.console.log(`Data changed - resetting download state from "${downloadState}" to "idle"`);
-      setDownloadState('idle');
-      setError(null);
-      // setJobId(null);
-
-      // Clear any ongoing polling
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    }
-  }, [data.timeRange, data.request?.requestId, downloadState]);
-
-  // Log button state
-  React.useEffect(() => {
-    window.console.log('Button state update:', {
-      isConfigured,
-      hasData,
-      downloadState,
-      isDataLoading,
-      dataState: data.state,
-      buttonEnabled: isConfigured && hasData && downloadState === 'idle' && !isDataLoading
-    });
-  }, [isConfigured, hasData, downloadState, isDataLoading, data.state]);
-
-  // Log render
-  window.console.log('Rendering Download component with current state:', {
-    downloadState,
-    error: !!error,
-    isConfigured,
-    hasData
-  });
-
-  // Get button properties based on state
   const getButtonProps = () => {
     switch (downloadState) {
       case 'processing':
@@ -395,17 +307,9 @@ export const Download: React.FC<Props> = ({ options, data, width, height }) => {
         };
       case 'downloaded':
         return {
-          text: 'Downloaded',
+          text: 'Download Finished',
           icon: 'check' as const,
           variant: 'success' as const,
-          disabled: true
-        };
-      case 'error':
-        return {
-          text: options.text || 'Download PCAP',
-          icon: 'download-alt' as const,
-          variant: 'primary' as const,
-          disabled: !isConfigured || !hasData || isDataLoading
         };
       default:
         return {
@@ -420,15 +324,7 @@ export const Download: React.FC<Props> = ({ options, data, width, height }) => {
   const buttonProps = getButtonProps();
 
   return (
-    <div
-      className={cx(
-        styles.wrapper,
-        css`
-          width: ${width}px;
-          height: ${height}px;
-        `
-      )}
-    >
+    <div>
       <div className={styles.buttonContainer}>
         <Button
           variant={buttonProps.variant}
@@ -437,7 +333,7 @@ export const Download: React.FC<Props> = ({ options, data, width, height }) => {
           onClick={handleDownload}
           disabled={buttonProps.disabled}
         >
-          {downloadState === 'processing' && <Spinner size="sm" />}
+          {downloadState === 'processing' && <Spinner className={styles.spinner} size="sm" />}
           {buttonProps.text}
         </Button>
 
