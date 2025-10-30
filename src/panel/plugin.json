@@ -1,13 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
   "type": "panel",
-  "name": "Pcap-Extractor",
+  "name": "PCAP Extractor Download Button",
   "id": "emnify-pcapextractor-panel",
   "info": {
     "keywords": ["panel"],
-    "description": "",
+    "description": "Download button to extract PCAPs",
     "author": {
-      "name": "Emnify"
+      "name": "emnify"
     },
     "logos": {
       "small": "img/logo.svg",
@@ -20,6 +20,17 @@
   },
   "dependencies": {
     "grafanaDependency": ">=10.4.0",
-    "plugins": []
+    "plugins": [
+      {
+        "id": "emnify-pcapextractor-datasource",
+        "type": "datasource",
+        "name": "PCAP Extractor Data Source"
+      },
+      {
+        "id": "grafana-dashboard-datasource",
+        "type": "datasource",
+        "name": "Dashboard Data Source"
+      }
+    ]
   }
 }
