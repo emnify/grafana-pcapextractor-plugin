@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
 	"github.com/emnify/pcap-extractor/pkg/models"
@@ -17,6 +18,17 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
+
+// Define separate interfaces to facilitate mocking in tests
+type SFNClientInterface interface {
+	StartExecution(ctx context.Context, params *sfn.StartExecutionInput, optFns ...func(*sfn.Options)) (*sfn.StartExecutionOutput, error)
+	DescribeExecution(ctx context.Context, params *sfn.DescribeExecutionInput, optFns ...func(*sfn.Options)) (*sfn.DescribeExecutionOutput, error)
+	DescribeStateMachine(ctx context.Context, params *sfn.DescribeStateMachineInput, optFns ...func(*sfn.Options)) (*sfn.DescribeStateMachineOutput, error)
+}
+
+type S3PresignerInterface interface {
+	PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
+}
 
 var (
 	_ backend.QueryDataHandler      = (*Datasource)(nil)
@@ -69,14 +81,16 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		AWSConfigProvider: authConfig,
 		sfnClient:         sfnClient,
 		s3Client:          s3Client,
+		s3Presigner:       s3.NewPresignClient(s3Client),
 	}, nil
 }
 
 type Datasource struct {
 	AWSConfigProvider awsauth.ConfigProvider
 	settings          *models.PluginSettings
-	sfnClient         *sfn.Client
+	sfnClient         SFNClientInterface
 	s3Client          *s3.Client
+	s3Presigner       S3PresignerInterface
 }
 
 type queryModel struct {
@@ -271,10 +285,12 @@ func (d *Datasource) executeStepFunction(ctx context.Context, name string, input
 }
 
 func (d *Datasource) generatePresignedURL(ctx context.Context, bucket, key string) (string, error) {
-	presignClient := s3.NewPresignClient(d.s3Client)
+	if d.s3Presigner == nil {
+		return "", fmt.Errorf("S3 presigner is not initialized")
+	}
 
 	// Generate presigned URL for GetObject with 1 hour expiration
-	request, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+	request, err := d.s3Presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
 	}, func(opts *s3.PresignOptions) {
