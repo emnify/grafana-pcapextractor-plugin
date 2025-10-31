@@ -3,7 +3,7 @@ export interface PcapExtractorOptions {
   text: string;
 }
 
-export type QueryTemplate {
+export type QueryTemplate = {
   refId: string,
   datasource: {
     type: string,
