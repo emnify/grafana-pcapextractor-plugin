@@ -210,6 +210,7 @@ export const Download: React.FC<Props> = ({ options, data }) => {
 
           setDownloadState('downloaded');
           triggerDownload(downloadUrl);
+          stopPolling(pollingIntervalRef);
 
         } else {
           window.console.error('Job ended with status:', status);
@@ -221,6 +222,7 @@ export const Download: React.FC<Props> = ({ options, data }) => {
             errorMessage += `\nCause: ${response.get('cause')}`;
           }
           setError(errorMessage);
+          stopPolling(pollingIntervalRef);
         }
       } else {
         setError('Invalid status response format - no status found in response:' + response);
@@ -229,9 +231,8 @@ export const Download: React.FC<Props> = ({ options, data }) => {
       window.console.error('Error polling job status:', error);
       let errorMessage = JSON.stringify(error, null, 2);
       setError(`Failed to poll status: ${errorMessage}`);
-
+      stopPolling(pollingIntervalRef)
     }
-    stopPolling(pollingIntervalRef)
   }, [options]);
 
   const handleDownload = async () => {
