@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -62,6 +63,9 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		CredentialsProfile: awsDS.Profile,
 		AssumeRoleARN:      awsDS.AssumeRoleARN,
 		ExternalID:         awsDS.ExternalID,
+		Endpoint:           awsDS.Endpoint,
+		Region:             awsDS.Region,
+		HTTPClient:         &http.Client{},
 	}
 
 	// Get AWS config using Grafana AWS SDK
@@ -78,7 +82,7 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 
 	return &Datasource{
 		settings:          pluginSettings,
-		AWSConfigProvider: authConfig,
+		AWSConfigProvider: awsauth.NewConfigProvider(),
 		sfnClient:         sfnClient,
 		s3Client:          s3Client,
 		s3Presigner:       s3.NewPresignClient(s3Client),
