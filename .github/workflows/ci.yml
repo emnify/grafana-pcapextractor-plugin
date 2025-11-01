@@ -23,6 +23,7 @@ jobs:
       has-backend: ${{ steps.check-for-backend.outputs.has-backend }}
     env:
       GRAFANA_ACCESS_POLICY_TOKEN: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
+      GRAFANA_PLUGIN_SIGN_ROOT_URLS: ${{ secrets.GRAFANA_PLUGIN_SIGN_ROOT_URLS }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,7 +84,8 @@ jobs:
 
       - name: Sign plugin
         run: |
-          npx @grafana/sign-plugin@latest --rootUrls https://example.com
+          # rootUrls is comma-separated list of Grafana URLs
+          npx @grafana/sign-plugin@latest --rootUrls ${{ env.GRAFANA_PLUGIN_SIGN_ROOT_URLS }}
         if: ${{ env.GRAFANA_ACCESS_POLICY_TOKEN != '' }}
 
       - name: Get plugin metadata
