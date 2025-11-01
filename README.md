@@ -29,7 +29,7 @@ datasources:
 
 | Panel appearance                                        | Panel configuration                                            |
 |---------------------------------------------------------|----------------------------------------------------------------|
-| ![Download button](src/datasource/img/panel-button.png) | ![Download button](src/datasource/img/panel-configuration.png) |
+| ![Download button](https://github.com/emnify/grafana-pcapextractor-plugin/blob/main/src/datasource/img/panel-button.png?raw=true) | ![Download button](https://github.com/emnify/grafana-pcapextractor-plugin/blob/main/src/datasource/img/panel-configuration.png?raw=true) |
 
 
 ## Development

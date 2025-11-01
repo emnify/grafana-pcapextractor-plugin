@@ -10,6 +10,6 @@ Go to the included _PCAP Extractor Data Source_ configuration and then add a _PC
 - Add a panel of type `PCAP download`.
 - Configure the panel and pick the `emnify-pcap-extractor` data source that should be available after successful provisioning.
 
-| Panel appearance                                        | Panel configuration                                        |
-|---------------------------------------------------------|------------------------------------------------------------|
-| ![Download button](datasource/img/panel-button.png) | ![Download button](datasource/img/panel-configuration.png) |
+| Panel appearance                                        | Panel configuration                                                                                                                      |
+|---------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| ![Download button](https://github.com/emnify/grafana-pcapextractor-plugin/blob/main/src/datasource/img/panel-button.png?raw=true) | ![Download button](https://github.com/emnify/grafana-pcapextractor-plugin/blob/main/src/datasource/img/panel-configuration.png?raw=true) |
