@@ -68,6 +68,8 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		HTTPClient:         &http.Client{},
 	}
 
+	backend.Logger.Debug("awsauth Settings: ", authSettings)
+
 	// Get AWS config using Grafana AWS SDK
 	cfg, err := authConfig.GetConfig(ctx, authSettings)
 	if err != nil {
