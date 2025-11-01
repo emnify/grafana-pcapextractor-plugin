@@ -65,10 +65,11 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		ExternalID:         awsDS.ExternalID,
 		Endpoint:           awsDS.Endpoint,
 		Region:             awsDS.Region,
+		LegacyAuthType:     awsDS.AuthType,
 		HTTPClient:         &http.Client{},
 	}
 
-	backend.Logger.Debug("awsauth Settings: ", authSettings)
+	backend.Logger.Debug("awsauth Settings", "CredentialsProfile", awsDS.Profile, "Region", awsDS.Region, "Endpoint", awsDS.Endpoint)
 
 	// Get AWS config using Grafana AWS SDK
 	cfg, err := authConfig.GetConfig(ctx, authSettings)
