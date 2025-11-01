@@ -82,7 +82,8 @@ jobs:
           fi
 
       - name: Sign plugin
-        run: npm run sign
+        run: |
+          npx @grafana/sign-plugin@latest --rootUrls https://example.com
         if: ${{ env.GRAFANA_ACCESS_POLICY_TOKEN != '' }}
 
       - name: Get plugin metadata
