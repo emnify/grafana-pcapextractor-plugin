@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -40,6 +41,16 @@ var (
 func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 	backend.Logger.Info("Creating new Datasource pcap-extractor")
 
+	// Debug environment variables
+	backend.Logger.Debug("AWS Environment Variables",
+		"AWS_REGION", os.Getenv("AWS_REGION"),
+		"AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"),
+		"AWS_PROFILE", os.Getenv("AWS_PROFILE"),
+		"AWS_ACCESS_KEY_ID", os.Getenv("AWS_ACCESS_KEY_ID") != "",
+		"AWS_SECRET_ACCESS_KEY", os.Getenv("AWS_SECRET_ACCESS_KEY") != "",
+		"AWS_SESSION_TOKEN", os.Getenv("AWS_SESSION_TOKEN") != "",
+		"HOME", os.Getenv("HOME"))
+
 	// Load plugin-specific settings
 	pluginSettings, err := models.LoadPluginSettings(settings)
 	if err != nil {
@@ -64,16 +75,28 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		AssumeRoleARN:      awsDS.AssumeRoleARN,
 		ExternalID:         awsDS.ExternalID,
 		Endpoint:           awsDS.Endpoint,
-		Region:             awsDS.Region,
+		Region:             "eu-west-1",
 		LegacyAuthType:     awsDS.AuthType,
 		HTTPClient:         &http.Client{},
 	}
 
-	backend.Logger.Debug("awsauth Settings", "CredentialsProfile", awsDS.Profile, "Region", awsDS.Region, "Endpoint", awsDS.Endpoint)
+	backend.Logger.Debug("awsauth Settings",
+		"CredentialsProfile", awsDS.Profile,
+		"Region", awsDS.Region,
+		"Endpoint", awsDS.Endpoint,
+		"AccessKey", awsDS.AccessKey != "",
+		"SecretKey", awsDS.SecretKey != "",
+		"AssumeRoleARN", awsDS.AssumeRoleARN,
+		"AuthType", awsDS.AuthType)
 
 	// Get AWS config using Grafana AWS SDK
 	cfg, err := authConfig.GetConfig(ctx, authSettings)
 	if err != nil {
+		backend.Logger.Error("Failed to get AWS config",
+			"error", err,
+			"CredentialsProfile", awsDS.Profile,
+			"Region", awsDS.Region,
+			"AuthType", awsDS.AuthType)
 		return nil, fmt.Errorf("failed to get AWS config: %w", err)
 	}
 
