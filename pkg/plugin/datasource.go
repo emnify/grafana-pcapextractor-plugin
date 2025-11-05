@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -42,15 +41,10 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	backend.Logger.Info("Creating new Datasource pcap-extractor")
 
 	// Debug environment variables
-	backend.Logger.Debug("AWS Environment Variables",
-		"AWS_REGION", os.Getenv("AWS_REGION"),
-		"AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION"),
-		"AWS_PROFILE", os.Getenv("AWS_PROFILE"),
-		"AWS_ACCESS_KEY_ID", os.Getenv("AWS_ACCESS_KEY_ID") != "",
-		"AWS_SECRET_ACCESS_KEY", os.Getenv("AWS_SECRET_ACCESS_KEY") != "",
-		"AWS_SESSION_TOKEN", os.Getenv("AWS_SESSION_TOKEN") != "",
-		"HOME", os.Getenv("HOME"))
-
+	backend.Logger.Info("Env vars")
+	for _, pair := range os.Environ() {
+		backend.Logger.Info(pair)
+	}
 	// Load plugin-specific settings
 	pluginSettings, err := models.LoadPluginSettings(settings)
 	if err != nil {
@@ -69,25 +63,16 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 
 	// Convert to awsauth.Settings
 	authSettings := awsauth.Settings{
-		AccessKey:          awsDS.AccessKey,
-		SecretKey:          awsDS.SecretKey,
-		CredentialsProfile: awsDS.Profile,
-		AssumeRoleARN:      awsDS.AssumeRoleARN,
-		ExternalID:         awsDS.ExternalID,
-		Endpoint:           awsDS.Endpoint,
-		Region:             "eu-west-1",
-		LegacyAuthType:     awsDS.AuthType,
-		HTTPClient:         &http.Client{},
+		//AccessKey:          awsDS.AccessKey,
+		//SecretKey:          awsDS.SecretKey,
+		//CredentialsProfile: awsDS.Profile,
+		//AssumeRoleARN:      awsDS.AssumeRoleARN,
+		//ExternalID:         awsDS.ExternalID,
+		//Endpoint:           awsDS.Endpoint,
+		Region: "eu-west-1",
+		//LegacyAuthType:     awsDS.AuthType,
+		//HTTPClient:         &http.Client{},
 	}
-
-	backend.Logger.Debug("awsauth Settings",
-		"CredentialsProfile", awsDS.Profile,
-		"Region", awsDS.Region,
-		"Endpoint", awsDS.Endpoint,
-		"AccessKey", awsDS.AccessKey != "",
-		"SecretKey", awsDS.SecretKey != "",
-		"AssumeRoleARN", awsDS.AssumeRoleARN,
-		"AuthType", awsDS.AuthType)
 
 	// Get AWS config using Grafana AWS SDK
 	cfg, err := authConfig.GetConfig(ctx, authSettings)
