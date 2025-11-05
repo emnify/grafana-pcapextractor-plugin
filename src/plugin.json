@@ -3,6 +3,7 @@
   "type": "app",
   "name": "PCAP Extractor",
   "id": "emnify-pcapextractor-app",
+  "executable": "gpx_pcap_extractor",
   "info": {
     "keywords": ["app"],
     "description": "",
