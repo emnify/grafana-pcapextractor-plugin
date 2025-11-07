@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -44,10 +43,10 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	backend.Logger.Info("Creating new Datasource pcap-extractor")
 
 	// Debug environment variables
-	backend.Logger.Info("Env vars")
-	for _, pair := range os.Environ() {
-		backend.Logger.Info(pair)
-	}
+	//backend.Logger.Info("Env vars")
+	//for _, pair := range os.Environ() {
+	//backend.Logger.Info(pair)
+	//}
 	// Load plugin-specific settings
 	pluginSettings, err := models.LoadPluginSettings(settings)
 	if err != nil {
