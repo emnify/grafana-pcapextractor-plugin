@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -16,6 +18,7 @@ import (
 	"github.com/grafana/grafana-aws-sdk/pkg/awsauth"
 	"github.com/grafana/grafana-aws-sdk/pkg/awsds"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
@@ -58,20 +61,25 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		return nil, fmt.Errorf("failed to load AWS datasource settings: %w", err)
 	}
 
+	httpClient, err := getHTTPClient(ctx, settings)
+	if err != nil {
+		return aws.Config{}, err
+	}
+
 	// Create AWS auth config provider
 	authConfig := awsauth.NewConfigProvider()
 
 	// Convert to awsauth.Settings
 	authSettings := awsauth.Settings{
-		//AccessKey:          awsDS.AccessKey,
-		//SecretKey:          awsDS.SecretKey,
-		//CredentialsProfile: awsDS.Profile,
-		//AssumeRoleARN:      awsDS.AssumeRoleARN,
-		//ExternalID:         awsDS.ExternalID,
-		//Endpoint:           awsDS.Endpoint,
-		Region: "eu-west-1",
-		//LegacyAuthType:     awsDS.AuthType,
-		//HTTPClient:         &http.Client{},
+		AccessKey:          awsDS.AccessKey,
+		SecretKey:          awsDS.SecretKey,
+		CredentialsProfile: awsDS.Profile,
+		AssumeRoleARN:      awsDS.AssumeRoleARN,
+		ExternalID:         awsDS.ExternalID,
+		Endpoint:           awsDS.Endpoint,
+		Region:             "eu-west-1",
+		LegacyAuthType:     awsDS.AuthType,
+		HTTPClient:         httpClient,
 	}
 
 	// Get AWS config using Grafana AWS SDK
@@ -376,4 +384,20 @@ func (d *Datasource) validateSettings(ctx context.Context) error {
 		return fmt.Errorf("S3 Bucket name not configured")
 	}
 	return nil
+}
+
+func getHTTPClient(ctx context.Context, backendSettings backend.DataSourceInstanceSettings) (*http.Client, error) {
+	httpClientProvider := httpclient.NewProvider()
+	httpClientOptions, err := backendSettings.HTTPClientOptions(ctx)
+	if err != nil {
+		return nil, backend.PluginError(err)
+	}
+
+	httpClient, err := httpClientProvider.New(httpClientOptions)
+	if err != nil {
+		backend.Logger.Error("failed to create HTTP client", "error", err.Error())
+		return nil, backend.PluginError(err)
+	}
+	return httpClient, nil
+
 }
