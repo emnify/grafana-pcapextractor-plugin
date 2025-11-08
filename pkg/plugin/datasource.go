@@ -108,7 +108,7 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 	}
 
 	// Get AWS config using Grafana AWS SDK
-	cfg, err := authConfig.GetConfig(ctx, authSettings)
+	cfg, err = authConfig.GetConfig(ctx, authSettings)
 	if err != nil {
 		backend.Logger.Error("Failed to get AWS config",
 			"error", err,
