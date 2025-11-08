@@ -21,6 +21,14 @@ datasources:
       stepFunctionArn: arn:aws:states:us-onfire-1:12345678912:stateMachine:my-pcap-extractor
 ```
 
+Required IAM permissions
+
+- Step Functions
+  - `states:DescribeStateMachine`
+  - `states:StartExecution`
+- S3
+  - `s3:GetObject`
+
 ## Usage
 
 - Query PCAP data, make sure that results include columns `source_file` and `source_packet_number`.

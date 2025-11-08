@@ -4,19 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/emnify/pcap-extractor/pkg/models"
 	"github.com/grafana/grafana-aws-sdk/pkg/awsauth"
 	"github.com/grafana/grafana-aws-sdk/pkg/awsds"
@@ -45,39 +41,6 @@ var (
 
 func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 	backend.Logger.Info("Creating new Datasource pcap-extractor")
-
-	// Debug environment variables
-	backend.Logger.Info("Env vars:")
-	for _, pair := range os.Environ() {
-		if strings.HasPrefix(pair, "AWS_") {
-			if strings.HasPrefix(pair, "AWS_S") {
-				backend.Logger.Info(pair[0:20])
-			} else {
-				backend.Logger.Info(pair)
-			}
-		}
-	}
-
-	os.Unsetenv("AWS_PROFILE")
-	backend.Logger.Info("Trying AWS SDK directly...")
-
-	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithRegion("eu-west-1"),
-		config.WithDefaultRegion("eu-west-1"),
-		config.WithLogConfigurationWarnings(true),
-		config.WithSharedConfigProfile(""),
-	)
-	if err != nil {
-		log.Fatalf("AWS SDK: Unable to load SDK config, %v", err)
-	}
-	stsClient := sts.NewFromConfig(cfg)
-	callerId, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		log.Fatalf("AWS SDK: Failed to get caller identity: %v", err)
-	}
-	log.Printf("AWS SDK: CallerId: %v", *callerId.Arn)
-
-	backend.Logger.Info("Trying Grafana AWS SDK...")
 
 	// Load plugin-specific settings
 	pluginSettings, err := models.LoadPluginSettings(settings)
@@ -108,13 +71,13 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		AssumeRoleARN:      awsDS.AssumeRoleARN,
 		ExternalID:         awsDS.ExternalID,
 		Endpoint:           awsDS.Endpoint,
-		Region:             "eu-west-1",
+		Region:             awsDS.Region,
 		LegacyAuthType:     awsDS.AuthType,
 		HTTPClient:         httpClient,
 	}
 
 	// Get AWS config using Grafana AWS SDK
-	cfg, err = authConfig.GetConfig(ctx, authSettings)
+	cfg, err := authConfig.GetConfig(ctx, authSettings)
 	if err != nil {
 		backend.Logger.Error("Failed to get AWS config",
 			"error", err,
