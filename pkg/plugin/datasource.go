@@ -58,6 +58,7 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 		}
 	}
 
+	os.Unsetenv("AWS_PROFILE")
 	backend.Logger.Info("Trying AWS SDK directly...")
 
 	cfg, err := config.LoadDefaultConfig(context.Background(),
