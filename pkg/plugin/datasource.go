@@ -60,7 +60,7 @@ func NewDatasource(ctx context.Context, settings backend.DataSourceInstanceSetti
 
 	backend.Logger.Info("Trying AWS SDK directly...")
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithSharedConfigProfile(""))
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("eu-west-1"), config.WithDefaultRegion("eu-west-1"), config.WithLogConfigurationWarnings(true))
 	if err != nil {
 		log.Fatalf("AWS SDK: Unable to load SDK config, %v", err)
 	}
