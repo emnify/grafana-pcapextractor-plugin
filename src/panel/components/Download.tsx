@@ -272,7 +272,7 @@ export const Download: React.FC<Props> = ({ options, data }) => {
       // Start polling for step function status
       pollingIntervalRef.current = setInterval(() => {
         pollJobStatus(jobId);
-      }, 10000); // Poll every 10 seconds
+      }, 5000); // Poll every 5 seconds
 
     } catch (error) {
       window.console.error('❌ PCAP Download Process Failed');
