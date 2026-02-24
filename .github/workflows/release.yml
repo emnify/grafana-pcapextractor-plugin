@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: StephenKing/grafana-plugin-actions/build-plugin@sign-root-urls-test
+      - uses: grafana/plugin-actions/build-plugin@main
         with:
           go-version: 1.24
           policy_token: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
