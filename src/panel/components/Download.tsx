@@ -284,7 +284,10 @@ export const Download: React.FC<Props> = ({ options, data }) => {
   };
 
   const isConfigured = options.pcapExtractorDataSource;
-  const hasData = data.series && data.series.length > 0;
+  // The download uses the first series only, so require it to contain at least one row
+  const firstSeries = data.series?.[0];
+  const rowCount = firstSeries ? (firstSeries.length ?? firstSeries.fields?.[0]?.values?.length ?? 0) : 0;
+  const hasData = rowCount > 0;
   const isDataLoading = data.state === 'Loading';
 
   // Reset download state when data starts loading or when data changes
@@ -346,7 +349,7 @@ export const Download: React.FC<Props> = ({ options, data }) => {
 
         {isConfigured && !hasData && !isDataLoading && (
           <div className={styles.infoText}>
-            No series data available to send
+            No packets to extract (source panel returned no rows)
           </div>
         )}
 
