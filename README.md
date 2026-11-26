@@ -42,6 +42,14 @@ Required IAM permissions
 
 ## Development
 
+### Backend
+
+1. Build plugin
+
+   ```bash
+   mage
+   ```
+
 ### Frontend
 
 1. Install dependencies
