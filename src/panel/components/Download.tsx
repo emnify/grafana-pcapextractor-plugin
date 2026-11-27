@@ -3,7 +3,7 @@ import { PanelProps, Field, QueryResultMeta } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
 import { PcapExtractorOptions, QueryTemplate } from 'panel/types';
 import { css } from '@emotion/css';
-import { useStyles2, Button, Alert, Spinner } from '@grafana/ui';
+import { useStyles2, Button, Alert, Spinner, Tooltip } from '@grafana/ui';
 
 interface Props extends PanelProps<PcapExtractorOptions> { }
 
@@ -27,6 +27,15 @@ const getStyles = () => {
     `,
     spinner: css`
       margin-right: 8px;
+    `,
+    // Disabled buttons don't reliably emit mouse events, so the tooltip is attached
+    // to a wrapper and the button itself is excluded from pointer events.
+    tooltipWrapper: css`
+      display: inline-block;
+      cursor: not-allowed;
+    `,
+    noPointerEvents: css`
+      pointer-events: none;
     `
   };
 };
@@ -89,6 +98,13 @@ async function queryBackend(query: QueryTemplate) {
   return parseResponse(response);
 }
 
+const REQUIRED_FIELD_NAMES = ['source_file', 'source_packet_number'];
+
+const getMissingFields = (fields: Field[] | undefined): string[] => {
+  const present = new Set((fields ?? []).map(field => field.name));
+  return REQUIRED_FIELD_NAMES.filter(required => !present.has(required));
+};
+
 const transformExtractData = (seriesData: {
   name?: string | undefined;
   fields: Field[] | undefined;
@@ -98,9 +114,8 @@ const transformExtractData = (seriesData: {
 })=>  {
 
   // Extract only the required fields: source_file and source_packet_number
-  const requiredFieldNames = ['source_file', 'source_packet_number'];
   const extractedFields = seriesData?.fields?.filter(field =>
-    requiredFieldNames.includes(field.name)
+    REQUIRED_FIELD_NAMES.includes(field.name)
   ).map(field => ({
     name: field.name,
     type: field.type,
@@ -108,9 +123,7 @@ const transformExtractData = (seriesData: {
   })) || [];
 
   // Validate that all required fields are present
-  const missingFields = requiredFieldNames.filter(required => 
-    !extractedFields.map(field => field.name).includes(required)
-  );
+  const missingFields = getMissingFields(seriesData?.fields);
 
   if (missingFields.length > 0) {
     throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
@@ -289,6 +302,13 @@ export const Download: React.FC<Props> = ({ options, data }) => {
   const rowCount = firstSeries ? (firstSeries.length ?? firstSeries.fields?.[0]?.values?.length ?? 0) : 0;
   const hasData = rowCount > 0;
   const isDataLoading = data.state === 'Loading';
+  const missingFields = firstSeries ? getMissingFields(firstSeries.fields) : [];
+  const hasRequiredFields = missingFields.length === 0;
+  const missingFieldsReason = hasRequiredFields
+    ? undefined
+    : `The query result is missing the required field${missingFields.length > 1 ? 's' : ''} ` +
+      `${missingFields.map(name => `"${name}"`).join(' and ')}. ` +
+      `Select ${REQUIRED_FIELD_NAMES.map(name => `"${name}"`).join(' and ')} in the panel query.`;
 
   // Reset download state when data starts loading or when data changes
   React.useEffect(() => {
@@ -320,7 +340,7 @@ export const Download: React.FC<Props> = ({ options, data }) => {
           text: options.text || 'Download PCAP',
           icon: 'download-alt' as const,
           variant: 'primary' as const,
-          disabled: !isConfigured || !hasData || isDataLoading
+          disabled: !isConfigured || !hasData || !hasRequiredFields || isDataLoading
         };
     }
   };
@@ -330,16 +350,27 @@ export const Download: React.FC<Props> = ({ options, data }) => {
   return (
     <div>
       <div className={styles.buttonContainer}>
-        <Button
-          variant={buttonProps.variant}
-          size="md"
-          icon={buttonProps.icon}
-          onClick={handleDownload}
-          disabled={buttonProps.disabled}
-        >
-          {downloadState === 'processing' && <Spinner className={styles.spinner} size="sm" />}
-          {buttonProps.text}
-        </Button>
+        {(() => {
+          const showMissingFieldsTooltip = buttonProps.disabled && downloadState === 'idle' && !!missingFieldsReason;
+          const button = (
+            <Button
+              variant={buttonProps.variant}
+              size="md"
+              icon={buttonProps.icon}
+              onClick={handleDownload}
+              disabled={buttonProps.disabled}
+              className={showMissingFieldsTooltip ? styles.noPointerEvents : undefined}
+            >
+              {downloadState === 'processing' && <Spinner className={styles.spinner} size="sm" />}
+              {buttonProps.text}
+            </Button>
+          );
+          return showMissingFieldsTooltip ? (
+            <Tooltip content={missingFieldsReason!}>
+              <span className={styles.tooltipWrapper} tabIndex={0}>{button}</span>
+            </Tooltip>
+          ) : button;
+        })()}
 
         {!isConfigured && (
           <div className={styles.infoText}>
