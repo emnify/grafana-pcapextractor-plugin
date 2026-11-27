@@ -111,7 +111,7 @@ const transformExtractData = (seriesData: {
   length: number | undefined;
   refId?: string | undefined;
   meta?: QueryResultMeta | undefined
-})=>  {
+}) => {
 
   // Extract only the required fields: source_file and source_packet_number
   const extractedFields = seriesData?.fields?.filter(field =>
@@ -310,15 +310,13 @@ export const Download: React.FC<Props> = ({ options, data }) => {
       `${missingFields.map(name => `"${name}"`).join(' and ')}. ` +
       `Select ${REQUIRED_FIELD_NAMES.map(name => `"${name}"`).join(' and ')} in the panel query.`;
 
-  // Reset download state when data starts loading or when data changes
-  React.useEffect(() => {
-    if (isDataLoading && (downloadState === 'downloaded' || downloadState === 'error')) {
-      setDownloadState('idle');
-      setError(null);
-
-      stopPolling(pollingIntervalRef)
-    }
-  }, [isDataLoading, downloadState]);
+  // Reset download state when data starts loading. Done during render rather than in an
+  // effect (https://react.dev/learn/you-might-not-need-an-effect); polling has already
+  // been stopped when the state reached 'downloaded' or 'error'.
+  if (isDataLoading && (downloadState === 'downloaded' || downloadState === 'error')) {
+    setDownloadState('idle');
+    setError(null);
+  }
 
   const getButtonProps = () => {
     switch (downloadState) {
